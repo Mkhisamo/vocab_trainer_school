@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Тренажёр слов</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 0; background: #f6f7f9; color: #111; }
+    header { padding: 16px 20px; background: #fff; border-bottom: 1px solid #e5e7eb; position: sticky; top:0; z-index: 5;}
+    h1 { font-size: 18px; margin: 0; }
+    main { max-width: 960px; margin: 20px auto; padding: 0 16px 40px; }
+
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; }
+    .grid { display:grid; gap:16px; }
+    @media (min-width:900px){ .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+    label { display:block; font-size: 13px; color:#555; margin-bottom:6px; }
+    input, select, textarea {
+      width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; background:#fff;
+    }
+    button { border:1px solid #d1d5db; background:#fff; padding:10px 14px; border-radius:10px; cursor:pointer; }
+    button.primary { background:#111; color:#fff; border-color:#111; }
+    button.ghost { background:transparent; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .tag { padding:4px 8px; background:#f1f5f9; border-radius:999px; font-size:12px; }
+    .muted { color:#6b7280; font-size: 13px; }
+    .wordlist { max-height: 260px; overflow:auto; border-top:1px dashed #e5e7eb; margin-top:10px; padding-top:10px;}
+    .worditem { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #f0f0f0; }
+    .worditem:last-child{ border-bottom:none; }
+    .q-word { font-size:26px; margin:4px 0 10px; }
+    .answers { display:grid; gap:10px; }
+    .answers button { text-align:left; }
+    .ok { background:#ecfdf5; border-color:#10b981; }
+    .bad { background:#fef2f2; border-color:#ef4444; }
+    .pill { padding:6px 10px; background:#f3f4f6; border-radius:999px; }
+    .split { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .danger { border-color:#ef4444; color:#ef4444; }
+    details summary { cursor:pointer; }
+    .small { font-size:12px; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f3f4f6; padding:2px 6px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <header class="split">
+    <h1>Тренажёр слов</h1>
+    <div class="row">
+      <button id="exportBtn">Экспорт</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" />
+      <button id="importBtn">Импорт</button>
+      <button id="resetBtn" class="danger">Сбросить всё</button>
+    </div>
+  </header>
+
+  <main class="grid grid-2">
+    <!-- Панель добавления -->
+    <section class="card">
+      <h2 style="margin-top:0">База слов</h2>
+      <div class="grid">
+        <div class="grid">
+          <div>
+            <label>Слово на английском</label>
+            <input id="en" placeholder="cat" />
+          </div>
+          <div>
+            <label>Перевод (по-русски)</label>
+            <input id="ru" placeholder="кот" />
+          </div>
+          <div>
+            <label>Категория (например, Animals, School…)</label>
+            <input id="cat" placeholder="Animals" />
+          </div>
+        </div>
+        <div class="row">
+          <button id="addBtn" class="primary">Добавить</button>
+          <span class="muted">Подсказка: нажмите <span class="kbd">Enter</span> в любом поле</span>
+        </div>
+      </div>
+
+      <div class="split" style="margin-top:16px;">
+        <div class="row">
+          <span class="muted">Всего слов: <b id="count">0</b></span>
+          <span class="muted">Категории: <span id="cats"></span></span>
+        </div>
+        <div class="row">
+          <input id="search" placeholder="Поиск по словарю…" />
+        </div>
+      </div>
+
+      <div class="wordlist" id="list"></div>
+    </section>
+
+    <!-- Панель тренировки -->
+    <section class="card">
+      <h2 style="margin-top:0">Тренировка</h2>
+      <div class="grid">
+        <div class="grid">
+          <div>
+            <label>Режим вопроса</label>
+            <select id="mode">
+              <option value="en2ru">Показать английское → выбрать русский</option>
+              <option value="ru2en">Показать русский → выбрать английский</option>
+              <option value="mix">Смешанный</option>
+            </select>
+          </div>
+          <div>
+            <label>Категория для тренировки</label>
+            <select id="filterCat"></select>
+          </div>
+          <div>
+            <label>Количество вопросов</label>
+            <select id="quizLen">
+              <option>5</option><option selected>10</option><option>15</option><option>20</option><option>30</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <button id="startBtn" class="primary">Старт</button>
+          <span class="muted">Очки: <b id="score">0</b> из <b id="total">0</b></span>
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:14px 0" />
+
+      <div id="quizArea" style="display:none">
+        <div class="split">
+          <div class="row">
+            <span class="pill" id="qCounter">1/10</span>
+            <span class="pill" id="qCat"></span>
+            <span class="pill small" id="qHint"></span>
+          </div>
+          <button id="skipBtn" class="ghost">Пропустить</button>
+        </div>
+
+        <div class="q-word" id="qWord">word</div>
+        <div class="answers" id="answers"></div>
+        <div class="row" style="margin-top:10px">
+          <button id="nextBtn" class="primary" disabled>Далее</button>
+          <span class="muted" id="feedback"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" style="grid-column:1/-1">
+      <details>
+        <summary><b>Как это работает и что можно улучшить</b></summary>
+        <ul>
+          <li>Слова хранятся в браузере (localStorage). Можно <b>Экспорт/Импорт</b> для переноса.</li>
+          <li>Есть фильтр по категориям, поиск, выбор направления (EN→RU, RU→EN, MIX).</li>
+          <li>Варианты ответа подбираются из всей базы, всегда 4 опции (1 правильная + 3 случайных).</li>
+          <li>Идеи на будущее: «сложные слова» (ошибся → чаще показывать), озвучка, карточки, статистика по дням.</li>
+        </ul>
+      </details>
+    </section>
+  </main>
+
+  <script>
+  // ======= Хранилище =======
+  const KEY = "vocab.trainer.words.v1";
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    words: loadWords(),
+    quiz: null,
+    current: 0,
+    score: 0,
+  };
+
+  function loadWords(){
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) return JSON.parse(raw);
+    } catch(e){}
+    // стартовый пример
+    return [
+      {en:"cat", ru:"кот", cat:"Animals"},
+      {en:"dog", ru:"собака", cat:"Animals"},
+      {en:"school", ru:"школа", cat:"School"},
+      {en:"teacher", ru:"учитель", cat:"School"},
+      {en:"book", ru:"книга", cat:"School"},
+      {en:"bird", ru:"птица", cat:"Animals"},
+    ];
+  }
+  function saveWords(){ localStorage.setItem(KEY, JSON.stringify(state.words)); }
+
+  // ======= UI обновления =======
+  function renderCounts(){
+    $("count").textContent = state.words.length;
+    const cats = [...new Set(state.words.map(w=>w.cat).filter(Boolean))].sort();
+    $("cats").innerHTML = cats.map(c=>`<span class="tag">${c}</span>`).join(" ");
+    // выпадающий фильтр
+    const filter = $("filterCat");
+    const current = filter.value;
+    filter.innerHTML = `<option value="">Все категории</option>` + cats.map(c=>`<option>${c}</option>`).join("");
+    if ([...filter.options].some(o=>o.value===current)) filter.value=current;
+  }
+
+  function renderList(){
+    const q = $("search").value.trim().toLowerCase();
+    const rows = state.words
+      .filter(w => !q || w.en.toLowerCase().includes(q) || w.ru.toLowerCase().includes(q) || (w.cat||"").toLowerCase().includes(q))
+      .sort((a,b)=> (a.cat||"").localeCompare(b.cat||"") || a.en.localeCompare(b.en));
+    $("list").innerHTML = rows.map((w,i) => `
+      <div class="worditem">
+        <div>
+          <b>${escapeHtml(w.en)}</b> — ${escapeHtml(w.ru)}
+          ${w.cat ? `<span class="tag">${escapeHtml(w.cat)}</span>` : ""}
+        </div>
+        <div class="row">
+          <button onclick="editWord(${i})">✏️</button>
+          <button class="danger" onclick="delWord(${i})">🗑️</button>
+        </div>
+      </div>
+    `).join("") || `<div class="muted">Список пуст</div>`;
+  }
+
+  function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m])); }
+
+  // ======= CRUD =======
+  function addWord(){
+    const en = $("en").value.trim();
+    const ru = $("ru").value.trim();
+    const cat = $("cat").value.trim();
+    if (!en || !ru) { alert("Заполните английское слово и перевод"); return; }
+    state.words.push({en, ru, cat});
+    saveWords(); $("en").value=""; $("ru").value=""; $("cat").value="";
+    renderCounts(); renderList();
+  }
+  function editWord(i){
+    const w = state.words[i];
+    const en = prompt("Английское слово:", w.en); if (en===null) return;
+    const ru = prompt("Перевод:", w.ru); if (ru===null) return;
+    const cat = prompt("Категория:", w.cat||""); if (cat===null) return;
+    state.words[i] = {en:en.trim(), ru:ru.trim(), cat:cat.trim()};
+    saveWords(); renderCounts(); renderList();
+  }
+  function delWord(i){
+    if (!confirm("Удалить слово?")) return;
+    state.words.splice(i,1);
+    saveWords(); renderCounts(); renderList();
+  }
+
+  // ======= Квиз =======
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  function sample(arr, n){
+    const copy = arr.slice(); shuffle(copy); return copy.slice(0, n);
+  }
+
+  function startQuiz(){
+    const poolCat = $("filterCat").value;
+    const mode = $("mode").value;
+    const pool = state.words.filter(w => !poolCat || (w.cat||"")===poolCat);
+    if (pool.length < 4) { alert("Нужно минимум 4 слова в выбранной категории/базе."); return; }
+    const len = Math.min(parseInt($("quizLen").value,10), pool.length);
+
+    state.quiz = { mode, pool: shuffle(pool.slice()), len };
+    state.current = 0; state.score = 0;
+    $("score").textContent = "0"; $("total").textContent = len;
+    $("quizArea").style.display = "block";
+    nextQuestion();
+  }
+
+  function nextQuestion(){
+    const {mode, pool, len} = state.quiz;
+    $("feedback").textContent = "";
+    $("nextBtn").disabled = true;
+    if (state.current >= len){ // завершение
+      const percent = Math.round(100 * state.score / len);
+      alert(`Готово! Результат: ${state.score} из ${len} (${percent}%)`);
+      $("quizArea").style.display = "none";
+      return;
+    }
+    const item = pool[state.current % pool.length];
+    const askEN = mode==="en2ru" ? true : mode==="ru2en" ? false : Math.random() < 0.5;
+    const question = askEN ? item.en : item.ru;
+    const correct = askEN ? item.ru : item.en;
+
+    const allAnswers = [...new Set(pool.map(w => askEN ? w.ru : w.en))];
+    const options = [correct, ...sample(allAnswers.filter(x => x !== correct), 3)];
+    shuffle(options);
+
+    $("qCounter").textContent = `${state.current+1}/${len}`;
+    $("qCat").textContent = item.cat || "Без категории";
+    $("qHint").textContent = askEN ? "EN → RU" : "RU → EN";
+    $("qWord").textContent = question;
+
+    const answersDiv = $("answers");
+    answersDiv.innerHTML = "";
+    options.forEach(opt => {
+      const btn = document.createElement("button");
+      btn.textContent = opt;
+      btn.onclick = () => selectAnswer(btn, opt, correct);
+      answersDiv.appendChild(btn);
+    });
+  }
+
+  function selectAnswer(btn, chosen, correct){
+    const buttons = [...$("answers").querySelectorAll("button")];
+    buttons.forEach(b => b.disabled = true);
+    if (chosen === correct){
+      btn.classList.add("ok");
+      state.score++; $("score").textContent = state.score;
+      $("feedback").textContent = "Верно!";
+    } else {
+      btn.classList.add("bad");
+      const rightBtn = buttons.find(b => b.textContent===correct);
+      if (rightBtn) rightBtn.classList.add("ok");
+      $("feedback").textContent = `Неверно. Правильно: ${correct}`;
+    }
+    $("nextBtn").disabled = false;
+  }
+
+  // ======= Экспорт/Импорт/Сброс =======
+  function exportJSON(){
+    const blob = new Blob([JSON.stringify(state.words, null, 2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "words.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function importJSON(file){
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const arr = JSON.parse(e.target.result);
+        if (!Array.isArray(arr)) throw new Error("bad");
+        // простая валидация
+        const cleaned = arr
+          .filter(o => o && typeof o.en==="string" && typeof o.ru==="string")
+          .map(o => ({en:o.en.trim(), ru:o.ru.trim(), cat:(o.cat||"").trim()}));
+        if (cleaned.length===0) { alert("В файле нет слов"); return; }
+        if (!confirm(`Импортировать ${cleaned.length} слов? Текущая база будет дополнена.`)) return;
+        state.words = [...state.words, ...cleaned];
+        saveWords(); renderCounts(); renderList();
+      } catch(err){
+        alert("Не удалось импортировать файл.");
+      }
+    };
+    reader.readAsText(file);
+  }
+  function resetAll(){
+    if (!confirm("Полный сброс словаря? Это нельзя отменить.")) return;
+    localStorage.removeItem(KEY);
+    state.words = [];
+    renderCounts(); renderList();
+  }
+
+  // ======= Привязка событий =======
+  $("addBtn").onclick = addWord;
+  ["en","ru","cat"].forEach(id => {
+    $(id).addEventListener("keydown", e => { if (e.key==="Enter") addWord(); });
+  });
+  $("search").oninput = renderList;
+  $("startBtn").onclick = startQuiz;
+  $("nextBtn").onclick = () => { state.current++; nextQuestion(); };
+  $("skipBtn").onclick = () => { state.current++; nextQuestion(); };
+  $("exportBtn").onclick = exportJSON;
+  $("importBtn").onclick = () => $("importFile").click();
+  $("importFile").onchange = (e)=> { if (e.target.files?.[0]) importJSON(e.target.files[0]); };
+  $("resetBtn").onclick = resetAll;
+
+  // первичная отрисовка
+  renderCounts(); renderList();
+  </script>
+</body>
+</html>
